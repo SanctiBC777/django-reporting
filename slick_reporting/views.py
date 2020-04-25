@@ -31,12 +31,6 @@ class SampleReportView(FormView):
 
     queryset = None
 
-    chart_settings = None
-    """
-    A list of chart settings objects instructing front end on how to plot the data.
-    
-    """
-
     template_name = 'slick_reporting/simple_report.html'
 
     def get(self, request, *args, **kwargs):
@@ -144,11 +138,9 @@ class SampleReportView(FormView):
         data = report_generator.get_report_data()
         data = self.filter_results(data, for_print)
         data = {
-            'report_slug': self.get_report_slug(),
             'data': data,
             'columns': self.get_columns_data(report_generator.get_list_display_columns()),
-            'metadata': self.get_metadata(generator=report_generator),
-            'chart_settings': self.get_chart_settings()
+            'metadata': self.get_metadata(generator=report_generator)
         }
         return data
 
@@ -165,10 +157,6 @@ class SampleReportView(FormView):
         }
         return metadata
 
-    def get_chart_settings(self):
-        return self.chart_settings or []
-
-
     def get_queryset(self):
         return self.queryset or self.report_model.objects
 
@@ -180,7 +168,3 @@ class SampleReportView(FormView):
         :return: filtered data
         """
         return data
-
-    @classmethod
-    def get_report_slug(cls):
-        return cls.__name__.lower()
