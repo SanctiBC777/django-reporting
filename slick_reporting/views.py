@@ -2,6 +2,7 @@ import datetime
 
 import simplejson as json
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse
 from django.utils.encoding import force_text
 from django.utils.functional import Promise
@@ -38,6 +39,7 @@ class SampleReportView(FormView):
     crosstab_ids = None
     crosstab_columns = None
     crosstab_compute_reminder = True
+    report_title = ''
 
     """
     A list of chart settings objects instructing front end on how to plot the data.
@@ -45,6 +47,17 @@ class SampleReportView(FormView):
     """
 
     template_name = 'slick_reporting/simple_report.html'
+
+    @classmethod
+    def get_report_model(cls):
+        """
+        Problem: During tests, override settings is used, making the report model always returning the model
+        'first to be found' not the potentially swapped one ,raising an error. so , it is advised to use this method instead
+            of declaring the report model on the module level.
+        :return: the Model to use
+        """
+        return cls.report_model
+
 
     def get(self, request, *args, **kwargs):
         form_class = self.get_form_class()
@@ -222,3 +235,47 @@ class SampleReportView(FormView):
             'start_date': SLICK_REPORTING_DEFAULT_START_DATE,
             'end_date': SLICK_REPORTING_DEFAULT_END_DATE
         }
+
+    def __init_subclass__(cls, **kwargs):
+        # sanity checks
+
+        chart_settings = getattr(cls, 'chart_settings', [])
+        if type(chart_settings) not in [list, type(None)]:
+            raise ImproperlyConfigured(f'chart_setting should be a list. it is {type(chart_settings)}')
+
+        if chart_settings:
+            for i, chart_setting in enumerate(chart_settings):
+                cls._check_chart_setting(i, chart_setting)
+
+        columns = getattr(cls, 'columns', [])
+        if columns is None:
+            raise ImproperlyConfigured(f'{cls} is missing the mandatory columns attribute.')
+        if type(columns) is not list:
+            raise ImproperlyConfigured(f'{cls} `columns is not a list. It is a {type(columns)}')
+
+        # try:
+        #     model_name = cls.base_model._meta.model_name
+        # except:
+        #     raise ImproperlyConfigured(f"Can not access base_model, is it set on {cls}?")
+
+        report_title = getattr(cls, 'report_title', None)
+        if report_title is None:
+            raise ImproperlyConfigured(f'Report {cls} is missing a `report_title`')
+        # try:
+        #     assert type(report_class.form_settings) is dict
+        # except (AttributeError, AssertionError):
+        #     raise ImproperlyConfigured(
+        #         'Report %s is missing a `form_settings` or form_settings is not a dict' % report_class)
+        if not cls.get_report_model():
+            raise ImproperlyConfigured(
+                f'Report {cls} is missing a `report_model`')
+
+    @classmethod
+    def _check_chart_setting(cls, i, setting):
+        available = ['id', 'type', 'title', 'data_source', 'title_source', 'plot_total', 'stacking', 'extra']
+        if type(setting) is not dict:
+            raise ImproperlyConfigured(f'The chart_setting index {i}  should be a dictionary')
+        for key in setting.keys():
+            if key not in available:
+                raise ImproperlyConfigured(f'The Report {cls} chart_setting index {i} have an unsupported key {key}. '
+                                           f'Available Options are {available}')
