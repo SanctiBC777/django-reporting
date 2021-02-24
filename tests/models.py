@@ -22,8 +22,6 @@ class Product(models.Model):
         verbose_name = _('Product')
         verbose_name_plural = _('Products')
 
-class Contact(models.Model):
-    address = models.CharField(max_length=200, verbose_name=_('Name'))
 
 class Client(models.Model):
     slug = models.CharField(max_length=200, verbose_name=_('Client Slug'))
@@ -31,7 +29,6 @@ class Client(models.Model):
     name = models.CharField(max_length=200, verbose_name=_('Name'))
     email = models.EmailField(blank=True)
     notes = models.TextField()
-    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, null=True)
 
     class Meta:
         verbose_name = _('Client')
