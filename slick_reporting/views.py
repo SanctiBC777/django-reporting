@@ -91,8 +91,7 @@ class SlickReportViewBase(FormView):
         :return:
         """
         return self.form_class or report_form_factory(self.get_report_model(), crosstab_model=self.crosstab_model,
-                                                      display_compute_reminder=self.crosstab_compute_reminder,
-                                                      excluded_fields=self.excluded_fields)
+                                                      display_compute_reminder=self.crosstab_compute_reminder, excluded_fields=self.excluded_fields)
 
     def get_form_kwargs(self):
         """
@@ -155,14 +154,25 @@ class SlickReportViewBase(FormView):
         """
         return row_obj
 
-    @classmethod
-    def get_columns_data(cls, generator):
+    def get_columns_data(self, columns):
         """
         Hook to get the columns information to front end
-        :param generator: the SlickReportGenerator instance used
+        :param columns:
         :return:
         """
-        return generator.get_columns_data()
+        # columns = report_generator.get_list_display_columns()
+        data = []
+
+        for col in columns:
+            data.append({
+                'name': col['name'],
+                'computation_field': col.get('original_name', ''),
+                'verbose_name': col['verbose_name'],
+                'visible': col.get('visible', True),
+                'type': col.get('type', 'text'),
+                'is_summable': col.get('is_summable', ''),
+            })
+        return data
 
     def get_report_results(self, for_print=False):
         """
@@ -174,24 +184,44 @@ class SlickReportViewBase(FormView):
         report_generator = self.get_report_generator(queryset, for_print)
         data = report_generator.get_report_data()
         data = self.filter_results(data, for_print)
+        data = {
+            'report_slug': self.get_report_slug(),
+            'data': data,
+            'columns': self.get_columns_data(report_generator.get_list_display_columns()),
+            'metadata': self.get_metadata(generator=report_generator),
+            'chart_settings': self.get_chart_settings()
+        }
+        return data
 
-        return report_generator.get_full_response(data=data, report_slug=self.get_report_slug(),
-                                                           chart_settings=self.chart_settings,
-                                                           default_chart_title=self.report_title)
-
-    @classmethod
-    def get_metadata(cls, generator):
+    def get_metadata(self, generator):
         """
         A hook to send data about the report for front end which can later be used in charting
         :return:
         """
-        return generator.get_metadata()
+        time_series_columns = generator.get_time_series_parsed_columns()
+        crosstab_columns = generator.get_crosstab_parsed_columns()
+        metadata = {
+            'time_series_pattern': self.time_series_pattern,
+            'time_series_column_names': [x['name'] for x in time_series_columns],
+            'time_series_column_verbose_names': [x['verbose_name'] for x in time_series_columns],
+            'crosstab_model': self.crosstab_model or '',
+            'crosstab_column_names': [x['name'] for x in crosstab_columns],
+            'crosstab_column_verbose_names': [x['verbose_name'] for x in crosstab_columns],
+        }
+        return metadata
 
-    def get_chart_settings(self, generator):
+    def get_chart_settings(self):
         """
         Ensure the sane settings are passed to the front end.
         """
-        return generator.get_chart_settings(self.chart_settings or [], self.report_title)
+        output = []
+        for i, x in enumerate(self.chart_settings or []):
+            x['id'] = x.get('id', f"{x['type']}-{i}")
+            if not x.get('title', False):
+                x['title'] = self.report_title
+            x['engine_name'] = x.get('engine_name', SLICK_REPORTING_DEFAULT_CHARTS_ENGINE)
+            output.append(x)
+        return output
 
     def get_queryset(self):
         return self.queryset or self.report_model.objects

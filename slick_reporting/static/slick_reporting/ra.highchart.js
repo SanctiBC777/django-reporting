@@ -430,7 +430,6 @@
 
 
         function is_timeseries_support(response, chartOptions) {
-            if (chartOptions.time_series_support === false) return false;
             return response.metadata.time_series_pattern || ''
         }
 
