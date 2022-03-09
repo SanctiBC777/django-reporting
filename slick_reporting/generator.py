@@ -192,12 +192,6 @@ class ReportGenerator(object):
         self.print_flag = print_flag or self.print_flag
 
         # todo validate columns is not empty (if no time series / cross tab)
-        if self.crosstab_model:
-            # first it is a relation .. nothing else is supported now
-
-            # todo duplicated again in report_form_factory
-            self.crosstab_field = [x for x in self.report_model._meta.get_fields() if x.name == self.crosstab_model]
-            self.crosstab_field_related_name = self.crosstab_field[0].to_fields[0]
 
         if self.group_by:
             group_by_split = self.group_by.split('__')
@@ -211,10 +205,6 @@ class ReportGenerator(object):
             self.focus_field_as_key = self.group_by_field
             if '__' not in self.group_by:
                 self.group_by_field_attname = self.group_by_field.attname
-                try:
-                    self.related_field_name = self.group_by_field.to_fields[0]
-                except:
-                    self.related_field_name = self.group_by_field.attname
             else:
                 self.group_by_field_attname = self.group_by
 
@@ -259,9 +249,7 @@ class ReportGenerator(object):
                     concrete_fields = [f.name for f in self.group_by_field.related_model._meta.concrete_fields]
                     # add database columns that are not already in concrete_fields
                     final_fields = concrete_fields + list(set(self.get_database_columns()) - set(concrete_fields))
-
-                    self.main_queryset = self.group_by_field.related_model.objects.filter(
-                        **{f'{self.related_field_name}__in': ids}).values(*final_fields)
+                    self.main_queryset = self.group_by_field.related_model.objects.filter(pk__in=ids).values(*final_fields)
                 else:
                     self.main_queryset = self.main_queryset.distinct().values(self.group_by_field_attname)
         else:
@@ -298,11 +286,9 @@ class ReportGenerator(object):
         :return:
         """
         if col_data['is_reminder']:
-            # filters = [~Q(**{f"{col_data['model']}_id__in": self.crosstab_ids})]
-            filters = [~Q(**{f"{col_data['model']}__{self.crosstab_field_related_name}__in": self.crosstab_ids})]
+            filters = [~Q(**{f"{col_data['model']}_id__in": self.crosstab_ids})]
         else:
-            # filters = [Q(**{f"{col_data['model']}_id": col_data['id']})]
-            filters = [Q(**{f"{col_data['model']}__{self.crosstab_field_related_name}": col_data['id']})]
+            filters = [Q(**{f"{col_data['model']}_id": col_data['id']})]
         return filters
 
     def _prepare_report_dependencies(self):
@@ -362,8 +348,7 @@ class ReportGenerator(object):
         data = {}
         group_by_val = None
         if self.group_by:
-            related_field_name = getattr(self, 'related_field_name', self.group_by_field_attname)
-            column_data = obj.get(related_field_name, obj.get('id'))
+            column_data = obj.get(self.group_by_field_attname, obj.get('id'))
             group_by_val = str(column_data)
 
         for window, window_cols in columns:
@@ -719,3 +704,4 @@ class ReportGenerator(object):
             x['engine_name'] = x.get('engine_name', SLICK_REPORTING_DEFAULT_CHARTS_ENGINE)
             output.append(x)
         return output
+
